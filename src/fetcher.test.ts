@@ -1,10 +1,10 @@
-import { Response } from 'cross-fetch';
+import fetch, { Response } from 'cross-fetch';
 import * as E from 'fp-ts/lib/Either';
-import { flow } from 'fp-ts/lib/function';
-import { pipe } from 'fp-ts/lib/pipeable';
+import { flow, pipe } from 'fp-ts/lib/function';
 import * as TE from 'fp-ts/lib/TaskEither';
 import * as io from 'io-ts';
 import { failure } from 'io-ts/lib/PathReporter';
+import _fetch from './mocks/fetch';
 
 import * as F from './fetcher';
 
@@ -21,10 +21,8 @@ const process400 = <T>() => flow(
 
 describe('Fetcher suite', () => {
   it('should handle simple 200 response with text data', async () => {
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo, _init?: RequestInit) => new Response('foo', { status: 200 }),
-    );
-
+    _fetch.reset();
+    _fetch.mock('http://host.tld', { status: 200, body: 'foo' });
     const fetcher = F.make(
       'http://host.tld',
       {
@@ -34,7 +32,7 @@ describe('Fetcher suite', () => {
     );
 
     pipe(
-      await F.toTaskEither(fetchMock)(fetcher)(),
+      await F.toTaskEither(fetch)(fetcher)(),
       E.fold(
         fail,
         ({ code, payload }) => {
@@ -48,12 +46,8 @@ describe('Fetcher suite', () => {
   it('should handle simple 200 response with JSON data', async () => {
     const TTestData = io.type({ foo: io.string, baz: io.number });
     const TEST_DATA = { foo: 'bar', baz: 42 };
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo, _init?: RequestInit) => new Response(
-        JSON.stringify(TEST_DATA),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    );
+    _fetch.reset();
+    _fetch.mock('http://host.tld', { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(TEST_DATA) });
 
     const fetcher = F.make(
       'http://host.tld',
@@ -64,7 +58,7 @@ describe('Fetcher suite', () => {
     );
 
     pipe(
-      await F.toTaskEither(fetchMock)(fetcher)(),
+      await F.toTaskEither(fetch)(fetcher)(),
       E.fold(
         fail,
         ({ code, payload }) => {
@@ -77,15 +71,11 @@ describe('Fetcher suite', () => {
 
   it('should handle simple 400 response', async () => {
     type TestMethod =
-      | { code: 200, payload: number }
-      | { code: 400, payload: string };
+      | { code: 200, payload: number; }
+      | { code: 400, payload: string; };
 
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo, _init?: RequestInit) => new Response(
-        'fooo',
-        { status: 400 },
-      ),
-    );
+    _fetch.reset();
+    _fetch.mock('http://host.tld', { status: 400, body: 'fooo' });
 
     const fetcher = F.make<TestMethod['code'], Error, TestMethod>(
       'http://host.tld',
@@ -97,7 +87,7 @@ describe('Fetcher suite', () => {
     );
 
     pipe(
-      await F.toTaskEither(fetchMock)(fetcher)(),
+      await F.toTaskEither(fetch)(fetcher)(),
       E.fold(
         fail,
         ({ code, payload }) => {
@@ -111,12 +101,8 @@ describe('Fetcher suite', () => {
   it('should validate incorrectly shaped responses', async () => {
     const TTestData = io.type({ foo: io.string, baz: io.number });
 
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo, _init?: RequestInit) => new Response(
-        JSON.stringify({ foo: 'bar', baz: '42' }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    );
+    _fetch.reset();
+    _fetch.mock('http://host.tld', { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ foo: 'bar', baz: '42' }) });
 
     const fetcher = F.make(
       'http://host.tld',
@@ -127,7 +113,7 @@ describe('Fetcher suite', () => {
     );
 
     pipe(
-      await F.toTaskEither(fetchMock)(fetcher)(),
+      await F.toTaskEither(fetch)(fetcher)(),
       E.fold(
         (e) => {
           expect(e.message).toContain('Invalid value "42" supplied to : { foo: string, baz: number }/baz: number');
@@ -139,15 +125,11 @@ describe('Fetcher suite', () => {
 
   it('should get data from headers using custom decoder', async () => {
     type TestMethod =
-      | { code: 200, payload: number }
-      | { code: 400, payload: string };
+      | { code: 200, payload: number; }
+      | { code: 400, payload: string; };
 
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo, _init?: RequestInit) => new Response(
-        null,
-        { status: 400, headers: { 'x-payload': 'fooo' } },
-      ),
-    );
+    _fetch.reset();
+    _fetch.mock('http://host.tld', { status: 400, headers: { 'x-payload': 'fooo' } });
 
     const process400Headers = (res: Response) =>
       async () => E.fromNullable(new Error('Header "x-payload" not found'))(res.headers.get('x-payload'));
@@ -161,7 +143,7 @@ describe('Fetcher suite', () => {
     );
 
     pipe(
-      await F.toTaskEither(fetchMock)(fetcher)(),
+      await F.toTaskEither(fetch)(fetcher)(),
       E.fold(
         fail,
         ({ code, payload }) => {
