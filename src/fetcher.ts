@@ -1,5 +1,4 @@
-import { flow, identity } from 'fp-ts/lib/function';
-import { pipe } from 'fp-ts/lib/pipeable';
+import { flow, identity, pipe } from 'fp-ts/lib/function';
 import * as RTE from 'fp-ts/lib/ReaderTaskEither';
 import * as R from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
@@ -121,7 +120,7 @@ export function bimap<S extends Status, E, A, G, B>(
 ): (fetcher: Fetcher<S, E, A>) => Fetcher<S, G, B> {
   return (fetcher: Fetcher<S, E, A>) => ({
     input: fetcher.input,
-    handlers: pipe(fetcher.handlers, R.map(RTE.bimap(f, g))) as Record<S, Decoder<G, B>>,
+    handlers: pipe(fetcher.handlers, R.map(RTE.bimap(f, g) as (a: unknown) => RTE.ReaderTaskEither<unknown, G, B>)) as Handlers<S, G, B>, // FIXME
     onUnexpectedError: pipe(fetcher.onUnexpectedError, RTE.bimap(f, g)),
     init: fetcher.init,
   });
